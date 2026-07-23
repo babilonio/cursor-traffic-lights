@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Traffic Lights Arena</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header><strong>Traffic Lights Arena</strong><span>LOCAL SIMULATION</span></header>
+    <main>
+      <section class="topline">
+        <div><span>SCENARIO</span><strong id="scenario">Loading…</strong></div>
+        <div><span>SCORE</span><strong id="score">—</strong></div>
+        <div><span>COMPLETED</span><strong id="completed">—</strong></div>
+        <div><span>WAIT</span><strong id="wait">—</strong></div>
+      </section>
+      <div class="canvas-wrap"><canvas id="arena"></canvas></div>
+      <footer>
+        <button id="toggle" class="icon" title="Play or pause" aria-label="Pause replay">Ⅱ</button>
+        <button id="reset" class="icon" title="Restart" aria-label="Restart replay">↺</button>
+        <div class="progress" role="progressbar" aria-label="Replay progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progress"></i></div>
+        <div class="speed" aria-label="Playback speed">
+          <button data-speed="0.25" aria-pressed="false">0.25×</button><button data-speed="0.5" aria-pressed="false">0.5×</button><button class="active" data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="4" aria-pressed="false">4×</button>
+        </div>
+        <span id="tick">000 / 000</span>
+      </footer>
+      <pre id="error" hidden></pre>
+    </main>
+    <script src="viewer.js"></script>
+  </body>
+</html>
