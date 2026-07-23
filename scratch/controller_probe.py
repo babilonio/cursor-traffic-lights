@@ -31,6 +31,7 @@ QUEUE_SHARE_MIN_TOTAL = 6.0
 BACKLOG_DEMAND_INFORMATIVE = 0.12
 
 _runtime = {}
+PROBE_LOG = []
 
 
 def _reset(state):
@@ -499,6 +500,23 @@ def control(state):
     requested_axis = _choose_axis(observation, demand)
     requested_phase = requested_axis + "_GREEN"
 
+    PROBE_LOG.append(
+        {
+            "tick": tick,
+            "demand_ns": demand["NS"],
+            "demand_ew": demand["EW"],
+            "target_ns": _runtime["targets"]["NS"],
+            "target_ew": _runtime["targets"]["EW"],
+            "requested": requested_axis,
+            "mode": _runtime["coordination_mode"],
+            "spillback": _runtime["spillback"],
+            "share_ewma": _runtime["pressure_share"],
+            "pressure_ns": observation["axis"]["NS"]["pressure"],
+            "pressure_ew": observation["axis"]["EW"]["pressure"],
+            "queue_ns": observation["axis"]["NS"]["queue"],
+            "queue_ew": observation["axis"]["EW"]["queue"],
+        }
+    )
     _runtime["tick"] = tick
     _runtime["requested"] = requested_axis
     _runtime["previous_queues"] = {

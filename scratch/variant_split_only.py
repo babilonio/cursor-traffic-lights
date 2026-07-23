@@ -24,11 +24,7 @@ LIGHT_DEMAND_RATIO = 1.35
 LIGHT_GREEN_BUDGET = 24
 BACKLOG_WEIGHT_MAX = 0.65
 BACKLOG_QUEUE_SCALE = 12.0
-PRESSURE_SHARE_ALPHA = 0.02
-QUEUE_SHARE_ALPHA = 0.02
-QUEUE_IMBALANCE_ZONE = 0.08
-QUEUE_SHARE_MIN_TOTAL = 6.0
-BACKLOG_DEMAND_INFORMATIVE = 0.12
+PRESSURE_SHARE_ALPHA = 0.05
 
 _runtime = {}
 
@@ -55,7 +51,6 @@ def _reset(state):
             "starvation": {"NS": 0, "EW": 0},
             "spillback": 0.0,
             "pressure_share": 0.5,
-            "queue_share": 0.5,
             "coordination_mode": "adaptive",
         }
     )
@@ -317,34 +312,17 @@ def _update_targets(demand, observation):
         desired_share = demand["NS"] / max(total, 0.001)
         # Arrival-based shares under-allocate green when one axis is
         # throughput-limited by tight links: its serviceable backlog keeps
-        # growing while its external arrival rate looks ordinary. A
-        # persistent queue-share imbalance (slow EWMA outside its noise band)
-        # identifies that structural case, while symmetric-but-congested maps
-        # oscillate around one half and stay inside the band. Steer toward
-        # the cycle-averaged axis-pressure share only in the structural case,
-        # only in the direction both signals agree on, and only when the
-        # demand share itself is uninformative (near even); a demand-driven
-        # split must never be dampened or amplified by backlog.
-        demand_deviation = desired_share - 0.5
-        backlog_deviation = _runtime["pressure_share"] - 0.5
-        imbalance_deviation = _runtime["queue_share"] - 0.5
-        if (
-            abs(imbalance_deviation) >= QUEUE_IMBALANCE_ZONE
-            and imbalance_deviation * backlog_deviation > 0.0
-            and demand_deviation * backlog_deviation >= 0.0
-        ):
-            informative = max(
-                0.0,
-                1.0 - abs(demand_deviation) / BACKLOG_DEMAND_INFORMATIVE,
-            )
-            backlog_weight = (
-                BACKLOG_WEIGHT_MAX
-                * informative
-                * min(1.0, queue_per_intersection / BACKLOG_QUEUE_SCALE)
-            )
-            desired_share += backlog_weight * (
-                _runtime["pressure_share"] - desired_share
-            )
+        # growing while its external arrival rate looks ordinary. As
+        # congestion builds, steer the split toward the cycle-averaged
+        # axis-pressure share. The instantaneous share is biased toward the
+        # currently green axis (red-axis links fill and get discounted), so
+        # only the slow EWMA is safe to steer with.
+        backlog_weight = BACKLOG_WEIGHT_MAX * min(
+            1.0, queue_per_intersection / BACKLOG_QUEUE_SCALE
+        )
+        desired_share += backlog_weight * (
+            _runtime["pressure_share"] - desired_share
+        )
         old_total = _runtime["targets"]["NS"] + _runtime["targets"]["EW"]
         old_share = _runtime["targets"]["NS"] / max(old_total, 1)
         ns_target = round(
@@ -429,18 +407,6 @@ def _choose_axis(observation, demand):
         margin_met = True
     target_elapsed = elapsed >= _runtime["targets"][current]
     starvation_floor = EMERGENCY_MIN_GREEN
-    targets = _runtime["targets"]
-    if (
-        current_data["oldest"] >= STARVATION_WAIT
-        and abs(targets["NS"] - targets["EW"]) >= 3
-        and abs(_runtime["queue_share"] - 0.5) >= QUEUE_IMBALANCE_ZONE
-    ):
-        # Bilateral congestion with a persistent backlog imbalance: both axes
-        # hold starving vehicles, so an early escape only shortens every
-        # cycle and erases the intended split. Let the allocated target
-        # govern. Without a sustained imbalance (symmetric spillback, bursty
-        # demand swings) the early escape stays, keeping cycles short.
-        starvation_floor = max(EMERGENCY_MIN_GREEN, targets[current])
     starved = elapsed >= starvation_floor and (
         other_data["oldest"] >= STARVATION_WAIT
         or _runtime["starvation"][other] >= MAX_CONTINUOUS_GREEN
@@ -488,12 +454,6 @@ def control(state):
     if pressure_total > 0.001:
         _runtime["pressure_share"] += PRESSURE_SHARE_ALPHA * (
             pressure_ns / pressure_total - _runtime["pressure_share"]
-        )
-    queue_ns = observation["axis"]["NS"]["queue"]
-    queue_total = queue_ns + observation["axis"]["EW"]["queue"]
-    if queue_total >= QUEUE_SHARE_MIN_TOTAL:
-        _runtime["queue_share"] += QUEUE_SHARE_ALPHA * (
-            queue_ns / queue_total - _runtime["queue_share"]
         )
     demand = _estimate_demand(observation)
     requested_axis = _choose_axis(observation, demand)
